@@ -3,58 +3,663 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Supply-chain-risk</title>
+  <title>Supply Chain Risk</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
+  <style>
+    .cell {
+      width: 44px;
+      height: 44px;
+      border: 1px solid #3f3f46;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.15s;
+      position: relative;
+      user-select: none;
+    }
+    .cell:hover { filter: brightness(1.3); }
+    .cell.empty { background: #18181b; }
+    .cell.p0 { background: #1e40af; color: #bfdbfe; }
+    .cell.p1 { background: #7f1d1d; color: #fecaca; }
+    .cell.home-0 { box-shadow: inset 0 0 0 3px #60a5fa; }
+    .cell.home-1 { box-shadow: inset 0 0 0 3px #f87171; }
+    .cell.selected { box-shadow: inset 0 0 0 3px #fbbf24 !important; filter: brightness(1.4); }
+    .cell.valid-target { box-shadow: inset 0 0 0 2px #4ade80; }
+    .cell.attack-target { box-shadow: inset 0 0 0 2px #fb923c; }
+    .cell .troops { font-size: 13px; line-height: 1; }
+    .cell .home-icon { font-size: 9px; opacity: 0.7; }
+    .cell.no-supply { opacity: 0.6; }
+    .cell.no-supply::after {
+      content: '⚡';
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 9px;
+    }
+    #log-panel {
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .dice-roll {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      background: #374151;
+      border-radius: 4px;
+      text-align: center;
+      line-height: 28px;
+      font-size: 16px;
+      margin: 2px;
+    }
+    .dice-a { background: #1e40af; }
+    .dice-d { background: #7f1d1d; }
+    .phase-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">Supply-chain-risk</h1>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-3 flex flex-col gap-3">
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
-
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
-
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+  <!-- Setup Screen -->
+  <div id="setup-screen" class="flex flex-col items-center justify-center min-h-screen gap-6">
+    <h1 class="text-3xl font-bold text-zinc-100">Supply Chain Risk</h1>
+    <p class="text-zinc-400 text-sm max-w-xs text-center">20×10 hex-grid war game. Capture the enemy's home base to win. Supply lines matter — cut off troops decay at 20% per turn.</p>
+    <div class="flex flex-col gap-3 w-64">
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Player 1 (Blue)</label>
+        <input id="p1-name" type="text" value="Player 1" class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+      </div>
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Player 2 (Red)</label>
+        <input id="p2-name" type="text" value="Player 2" class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-500">
+      </div>
+      <button id="start-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded transition-colors">
+        Start Game
+      </button>
+      <div id="recent-games" class="mt-2"></div>
+    </div>
   </div>
 
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token') || '';
-    const headers = token ? { 'x-usernode-token': token } : {};
+  <!-- Game Screen -->
+  <div id="game-screen" class="hidden flex flex-col gap-3">
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard');
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
-        return;
+    <!-- Header -->
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg font-bold">Supply Chain Risk</h1>
+        <span id="turn-info" class="text-zinc-400 text-sm"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="phase-badge" class="phase-badge bg-zinc-700 text-zinc-300">place</span>
+        <button id="back-btn" class="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-2 py-1">Menu</button>
+      </div>
+    </div>
+
+    <!-- Player info bar -->
+    <div class="flex gap-3">
+      <div id="p0-bar" class="flex-1 bg-blue-950/60 border border-blue-900/50 rounded p-2 text-sm">
+        <div class="flex justify-between items-center">
+          <span id="p0-name-display" class="font-semibold text-blue-300"></span>
+          <span id="p0-reinf" class="text-xs text-blue-400 bg-blue-900/40 rounded px-2 py-0.5"></span>
+        </div>
+        <div id="p0-cells" class="text-xs text-zinc-500 mt-0.5"></div>
+      </div>
+      <div id="p1-bar" class="flex-1 bg-red-950/60 border border-red-900/50 rounded p-2 text-sm">
+        <div class="flex justify-between items-center">
+          <span id="p1-name-display" class="font-semibold text-red-300"></span>
+          <span id="p1-reinf" class="text-xs text-red-400 bg-red-900/40 rounded px-2 py-0.5"></span>
+        </div>
+        <div id="p1-cells" class="text-xs text-zinc-500 mt-0.5"></div>
+      </div>
+    </div>
+
+    <!-- Grid + controls -->
+    <div class="flex gap-3 flex-wrap">
+      <!-- Grid -->
+      <div class="overflow-auto">
+        <div id="grid" style="display:grid; grid-template-columns: repeat(20, 44px); gap: 1px; background: #27272a; border: 1px solid #27272a; border-radius: 4px; overflow: hidden;"></div>
+      </div>
+
+      <!-- Side panel -->
+      <div class="flex flex-col gap-2 min-w-48 max-w-64 flex-1">
+
+        <!-- Action panel -->
+        <div id="action-panel" class="bg-zinc-900 border border-zinc-800 rounded p-3 text-sm flex flex-col gap-2">
+          <div id="action-title" class="font-semibold text-zinc-300 text-xs uppercase tracking-wide">Actions</div>
+          <div id="action-body" class="text-zinc-400 text-xs leading-relaxed"></div>
+
+          <!-- Troop amount slider -->
+          <div id="troop-picker" class="hidden flex flex-col gap-1">
+            <label class="text-xs text-zinc-500">Troops: <span id="troop-val">1</span></label>
+            <input id="troop-slider" type="range" min="1" max="20" value="1"
+              class="w-full accent-violet-500">
+          </div>
+
+          <div id="action-buttons" class="flex flex-col gap-1.5"></div>
+        </div>
+
+        <!-- Dice result -->
+        <div id="dice-panel" class="hidden bg-zinc-900 border border-zinc-800 rounded p-3 text-sm">
+          <div class="text-xs font-semibold text-zinc-400 mb-2">Battle Result</div>
+          <div id="dice-display" class="flex flex-col gap-1"></div>
+        </div>
+
+        <!-- Log -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded p-3">
+          <div class="text-xs font-semibold text-zinc-500 mb-1">Battle Log</div>
+          <div id="log-panel" class="text-xs text-zinc-400 space-y-0.5"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Win overlay -->
+    <div id="win-overlay" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div class="bg-zinc-900 border border-zinc-700 rounded-xl p-8 text-center max-w-sm">
+        <div class="text-5xl mb-4">🏆</div>
+        <h2 id="win-title" class="text-2xl font-bold mb-2"></h2>
+        <p class="text-zinc-400 text-sm mb-6">The enemy home base has been captured!</p>
+        <button id="play-again-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 px-6 rounded transition-colors">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let gameId = null;
+let gameState = null;
+let selectedCell = null;  // { col, row }
+let pendingPlaceCell = null; // { col, row } for troop placement
+
+const COLS = 20, ROWS = 10;
+const HOME = [{ col: 0, row: 4 }, { col: 19, row: 4 }];
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('back-btn').addEventListener('click', () => {
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('setup-screen').classList.remove('hidden');
+  loadRecentGames();
+});
+document.getElementById('play-again-btn').addEventListener('click', () => {
+  document.getElementById('win-overlay').classList.add('hidden');
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('setup-screen').classList.remove('hidden');
+  loadRecentGames();
+});
+
+async function startGame() {
+  const p1 = document.getElementById('p1-name').value.trim() || 'Player 1';
+  const p2 = document.getElementById('p2-name').value.trim() || 'Player 2';
+  const res = await fetch('/api/game/new', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ player1: p1, player2: p2 })
+  });
+  const data = await res.json();
+  gameId = data.id;
+  gameState = data.state;
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  selectedCell = null;
+  renderAll();
+}
+
+async function loadRecentGames() {
+  const res = await fetch('/api/games');
+  const data = await res.json();
+  const el = document.getElementById('recent-games');
+  if (!data.games || !data.games.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="text-xs text-zinc-500 mb-1">Recent games:</div>' +
+    data.games.slice(0, 5).map(g =>
+      `<div class="flex justify-between text-xs text-zinc-400 py-0.5 cursor-pointer hover:text-zinc-200"
+        onclick="loadGame(${g.id})">
+        <span>${g.p1} vs ${g.p2}</span>
+        <span class="${g.winner ? 'text-green-500' : 'text-yellow-500'}">${g.winner ? g.winner + ' won' : g.phase}</span>
+      </div>`
+    ).join('');
+}
+
+async function loadGame(id) {
+  const res = await fetch(`/api/game/${id}`);
+  const data = await res.json();
+  gameId = data.id;
+  gameState = data.state;
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  selectedCell = null;
+  renderAll();
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+async function doAction(action) {
+  const res = await fetch(`/api/game/${gameId}/action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action })
+  });
+  const data = await res.json();
+  if (data.error) { showActionError(data.error); return; }
+  gameState = data.state;
+  selectedCell = null;
+  pendingPlaceCell = null;
+
+  if (data.events) showDiceEvents(data.events);
+  renderAll();
+}
+
+function showActionError(msg) {
+  const body = document.getElementById('action-body');
+  const prev = body.innerHTML;
+  body.innerHTML = `<span class="text-red-400">${msg}</span>`;
+  setTimeout(() => { body.innerHTML = prev; }, 2000);
+}
+
+function showDiceEvents(events) {
+  const diceEvents = events.filter(e => e.includes('Dice!'));
+  const panel = document.getElementById('dice-panel');
+  const display = document.getElementById('dice-display');
+  if (diceEvents.length) {
+    panel.classList.remove('hidden');
+    display.innerHTML = diceEvents.map(e => {
+      const aMatch = e.match(/Attacker \[([^\]]+)\]/);
+      const dMatch = e.match(/Defender \[([^\]]+)\]/);
+      const lossMatch = e.match(/attacker -(\d+), defender -(\d+)/);
+      let html = `<div class="text-xs text-zinc-400 mb-1">${e}</div>`;
+      if (aMatch && dMatch) {
+        const aDice = aMatch[1].split(',').map(Number);
+        const dDice = dMatch[1].split(',').map(Number);
+        html = `<div class="flex items-center gap-1 flex-wrap">
+          <span class="text-xs text-blue-400 mr-1">Atk:</span>
+          ${aDice.map(d => `<span class="dice-roll dice-a">${d}</span>`).join('')}
+          <span class="text-xs text-zinc-500 mx-1">vs</span>
+          <span class="text-xs text-red-400 mr-1">Def:</span>
+          ${dDice.map(d => `<span class="dice-roll dice-d">${d}</span>`).join('')}
+        </div>`;
+        if (lossMatch) {
+          html += `<div class="text-xs mt-1 text-zinc-400">Attacker -${lossMatch[1]} / Defender -${lossMatch[2]}</div>`;
+        }
       }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
+      return html;
+    }).join('');
+  } else {
+    panel.classList.add('hidden');
+  }
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderAll() {
+  if (!gameState) return;
+  renderGrid();
+  renderHUD();
+  renderActionPanel();
+  renderLog();
+  if (gameState.winner) showWinner();
+}
+
+function cellKey(col, row) { return `${col},${row}`; }
+
+function hasSupplyLine(grid, key, playerIdx) {
+  const homeKey = cellKey(HOME[playerIdx].col, HOME[playerIdx].row);
+  if (key === homeKey) return true;
+  const visited = new Set();
+  const queue = [key];
+  visited.add(key);
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === homeKey) return true;
+    const [c, r] = cur.split(',').map(Number);
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+    for (const [dc, dr] of dirs) {
+      const nc = c + dc, nr = r + dr;
+      if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) continue;
+      const nk = cellKey(nc, nr);
+      if (!visited.has(nk) && grid[nk] && grid[nk].owner === playerIdx) {
+        visited.add(nk); queue.push(nk);
+      }
+    }
+  }
+  return false;
+}
+
+function getValidTargets(col, row) {
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  return dirs
+    .map(([dc,dr]) => [col+dc, row+dr])
+    .filter(([c,r]) => c >= 0 && c < COLS && r >= 0 && r < ROWS);
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  const gs = gameState;
+  const cp = gs.currentPlayer;
+  const phase = gs.phase;
+  const selKey = selectedCell ? cellKey(selectedCell.col, selectedCell.row) : null;
+
+  // Figure out valid targets if something is selected
+  let validMoves = new Set();
+  let attackTargets = new Set();
+  if (selectedCell && (phase === 'move' || phase === 'final_move')) {
+    const fromCell = gs.grid[selKey];
+    if (fromCell && fromCell.owner === cp && fromCell.troops > 1) {
+      for (const [nc, nr] of getValidTargets(selectedCell.col, selectedCell.row)) {
+        const nk = cellKey(nc, nr);
+        const nCell = gs.grid[nk];
+        if (!nCell || nCell.owner === cp) validMoves.add(nk);
+        else attackTargets.add(nk);
+      }
+      // Can also expand to empty
+      for (const [nc, nr] of getValidTargets(selectedCell.col, selectedCell.row)) {
+        const nk = cellKey(nc, nr);
+        if (!gs.grid[nk]) validMoves.add(nk);
+      }
+    }
+  }
+  if (selectedCell && phase === 'place') {
+    const fromCell = gs.grid[selKey];
+    // In place phase, selection just shows placement target
+  }
+
+  let cells = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const key = cellKey(c, r);
+      const cell = gs.grid[key];
+      const isHome0 = HOME[0].col === c && HOME[0].row === r;
+      const isHome1 = HOME[1].col === c && HOME[1].row === r;
+      const isSelected = key === selKey;
+      const isValidMove = validMoves.has(key);
+      const isAttackTarget = attackTargets.has(key);
+      const noSupply = cell && !hasSupplyLine(gs.grid, key, cell.owner);
+
+      let cls = 'cell';
+      if (!cell) cls += ' empty';
+      else if (cell.owner === 0) cls += ' p0';
+      else cls += ' p1';
+      if (isHome0) cls += ' home-0';
+      if (isHome1) cls += ' home-1';
+      if (isSelected) cls += ' selected';
+      if (isValidMove && !isSelected) cls += ' valid-target';
+      if (isAttackTarget) cls += ' attack-target';
+      if (noSupply) cls += ' no-supply';
+
+      const inner = cell
+        ? `<span class="troops">${cell.troops}</span>${(isHome0 || isHome1) ? '<span class="home-icon">HOME</span>' : ''}`
+        : (isHome0 || isHome1 ? '<span class="home-icon text-zinc-600">HOME</span>' : '');
+
+      cells += `<div class="${cls}" data-col="${c}" data-row="${r}" title="${key}${cell ? ' ('+['Blue','Red'][cell.owner]+' '+cell.troops+')' : ''}">${inner}</div>`;
+    }
+  }
+  grid.innerHTML = cells;
+
+  // Add click handlers
+  grid.querySelectorAll('.cell').forEach(el => {
+    el.addEventListener('click', () => onCellClick(parseInt(el.dataset.col), parseInt(el.dataset.row)));
+  });
+}
+
+function onCellClick(col, row) {
+  const gs = gameState;
+  const cp = gs.currentPlayer;
+  const phase = gs.phase;
+  const key = cellKey(col, row);
+  const cell = gs.grid[key];
+
+  if (phase === 'place') {
+    if (cell && cell.owner === cp) {
+      selectedCell = { col, row };
+      pendingPlaceCell = { col, row };
+      renderActionPanel();
+      renderGrid();
+    }
+    return;
+  }
+
+  if (phase === 'move' || phase === 'final_move') {
+    if (!selectedCell) {
+      // Select own cell
+      if (cell && cell.owner === cp && cell.troops > 1) {
+        selectedCell = { col, row };
+        renderGrid();
+        renderActionPanel();
+      }
+      return;
     }
 
-    document.getElementById('press-btn').addEventListener('click', async () => {
-      try {
-        const res = await fetch('/api/press', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-        });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
-    });
+    const selKey = cellKey(selectedCell.col, selectedCell.row);
 
-    loadLeaderboard();
-  </script>
+    // Click same cell = deselect
+    if (key === selKey) {
+      selectedCell = null;
+      renderGrid();
+      renderActionPanel();
+      return;
+    }
+
+    // Check adjacency
+    const dc = Math.abs(col - selectedCell.col);
+    const dr = Math.abs(row - selectedCell.row);
+    if (dc + dr !== 1) {
+      // Re-select if own cell
+      if (cell && cell.owner === cp && cell.troops > 1) {
+        selectedCell = { col, row };
+        renderGrid();
+        renderActionPanel();
+      } else {
+        selectedCell = null;
+        renderGrid();
+        renderActionPanel();
+      }
+      return;
+    }
+
+    const fromCell = gs.grid[selKey];
+    if (!fromCell || fromCell.owner !== cp) { selectedCell = null; renderGrid(); return; }
+
+    const maxTroops = fromCell.troops - 1;
+    if (maxTroops < 1) { selectedCell = null; renderGrid(); return; }
+
+    // Show troop picker before confirming move
+    const isAttack = cell && cell.owner !== cp;
+    const troopSlider = document.getElementById('troop-slider');
+    const troopVal = document.getElementById('troop-val');
+    troopSlider.max = maxTroops;
+    troopSlider.value = Math.min(parseInt(troopSlider.value) || maxTroops, maxTroops);
+    troopVal.textContent = troopSlider.value;
+
+    document.getElementById('troop-picker').classList.remove('hidden');
+
+    // Store pending move
+    window._pendingMove = { fromCol: selectedCell.col, fromRow: selectedCell.row, toCol: col, toRow: row };
+    renderActionPanel(isAttack ? 'confirm-attack' : 'confirm-move');
+    renderGrid();
+    return;
+  }
+
+  if (phase === 'fight') {
+    // clicking does nothing special in fight phase
+  }
+}
+
+function renderHUD() {
+  const gs = gameState;
+  document.getElementById('turn-info').textContent = `Turn ${gs.turnNumber} — ${gs.players[gs.currentPlayer].name}'s turn`;
+
+  const phaseLabels = {
+    place: 'Place Troops', move: 'Move', fight: 'Fight',
+    final_move: 'Final Move', gameover: 'Game Over'
+  };
+  const phaseColors = {
+    place: 'bg-green-900 text-green-300',
+    move: 'bg-blue-900 text-blue-300',
+    fight: 'bg-orange-900 text-orange-300',
+    final_move: 'bg-purple-900 text-purple-300',
+    gameover: 'bg-zinc-700 text-zinc-300',
+  };
+  const badge = document.getElementById('phase-badge');
+  badge.textContent = phaseLabels[gs.phase] || gs.phase;
+  badge.className = 'phase-badge ' + (phaseColors[gs.phase] || 'bg-zinc-700 text-zinc-300');
+
+  // Active player highlight
+  document.getElementById('p0-bar').classList.toggle('ring-2', gs.currentPlayer === 0);
+  document.getElementById('p0-bar').classList.toggle('ring-blue-500', gs.currentPlayer === 0);
+  document.getElementById('p1-bar').classList.toggle('ring-2', gs.currentPlayer === 1);
+  document.getElementById('p1-bar').classList.toggle('ring-red-500', gs.currentPlayer === 1);
+
+  for (let p = 0; p < 2; p++) {
+    const cells = Object.values(gs.grid).filter(c => c.owner === p);
+    const troops = cells.reduce((s, c) => s + c.troops, 0);
+    document.getElementById(`p${p}-name-display`).textContent = gs.players[p].name;
+    document.getElementById(`p${p}-reinf`).textContent = `+${gs.players[p].reinforcements} reinf`;
+    document.getElementById(`p${p}-cells`).textContent = `${cells.length} cells · ${troops} troops`;
+  }
+}
+
+function renderActionPanel(override) {
+  const gs = gameState;
+  const cp = gs.currentPlayer;
+  const phase = override || gs.phase;
+  const title = document.getElementById('action-title');
+  const body = document.getElementById('action-body');
+  const buttons = document.getElementById('action-buttons');
+  const picker = document.getElementById('troop-picker');
+
+  buttons.innerHTML = '';
+
+  if (gs.winner) {
+    title.textContent = 'Game Over';
+    body.textContent = gs.winner + ' wins!';
+    picker.classList.add('hidden');
+    return;
+  }
+
+  if (phase === 'place') {
+    picker.classList.add('hidden');
+    title.textContent = 'Place Troops';
+    const reinf = gs.players[cp].reinforcements;
+    if (reinf > 0) {
+      if (pendingPlaceCell) {
+        const key = cellKey(pendingPlaceCell.col, pendingPlaceCell.row);
+        body.textContent = `Placing on (${key}). You have ${reinf} reinforcements.`;
+
+        const slider = document.getElementById('troop-slider');
+        const valEl = document.getElementById('troop-val');
+        slider.max = reinf;
+        slider.value = Math.min(parseInt(slider.value) || 1, reinf);
+        valEl.textContent = slider.value;
+        picker.classList.remove('hidden');
+
+        addBtn(buttons, 'Place Troops', 'bg-green-700 hover:bg-green-600', () => {
+          const amt = parseInt(document.getElementById('troop-slider').value);
+          doAction({ type: 'PLACE_TROOPS', col: pendingPlaceCell.col, row: pendingPlaceCell.row, amount: amt });
+        });
+        addBtn(buttons, 'Done Placing', 'bg-zinc-700 hover:bg-zinc-600', () => doAction({ type: 'END_PLACE' }));
+      } else {
+        body.textContent = `Select one of your cells to place troops. You have ${reinf} reinforcements.`;
+      }
+    } else {
+      body.textContent = 'No reinforcements left.';
+      addBtn(buttons, 'Done Placing', 'bg-zinc-700 hover:bg-zinc-600', () => doAction({ type: 'END_PLACE' }));
+    }
+    return;
+  }
+
+  if (phase === 'move') {
+    title.textContent = 'Move Troops';
+    body.textContent = selectedCell
+      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell to move or attack.`
+      : `${gs.movesLeft} move(s) left. Select a cell with >1 troop.`;
+    if (selectedCell) {
+      addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell = null; renderGrid(); renderActionPanel(); });
+    }
+    addBtn(buttons, 'Skip Moves', 'bg-zinc-700 hover:bg-zinc-600', () => doAction({ type: 'END_MOVE' }));
+    return;
+  }
+
+  if (phase === 'confirm-move' || phase === 'confirm-attack') {
+    const pm = window._pendingMove;
+    const isAtk = phase === 'confirm-attack';
+    title.textContent = isAtk ? 'Confirm Attack' : 'Confirm Move';
+    body.textContent = isAtk
+      ? `Attack (${cellKey(pm.toCol, pm.toRow)}) from (${cellKey(pm.fromCol, pm.fromRow)})`
+      : `Move from (${cellKey(pm.fromCol, pm.fromRow)}) to (${cellKey(pm.toCol, pm.toRow)})`;
+
+    addBtn(buttons, isAtk ? 'Attack!' : 'Move', isAtk ? 'bg-orange-700 hover:bg-orange-600' : 'bg-blue-700 hover:bg-blue-600', () => {
+      const amt = parseInt(document.getElementById('troop-slider').value);
+      doAction({ type: 'MOVE_TROOPS', fromCol: pm.fromCol, fromRow: pm.fromRow, toCol: pm.toCol, toRow: pm.toRow, amount: amt });
+      window._pendingMove = null;
+      document.getElementById('troop-picker').classList.add('hidden');
+    });
+    addBtn(buttons, 'Cancel', 'bg-zinc-700 hover:bg-zinc-600', () => {
+      selectedCell = null; window._pendingMove = null;
+      document.getElementById('troop-picker').classList.add('hidden');
+      renderGrid(); renderActionPanel();
+    });
+    return;
+  }
+
+  if (phase === 'fight') {
+    picker.classList.add('hidden');
+    title.textContent = 'Fight Phase';
+    if (gs.pendingFight) {
+      body.textContent = `Attack queued: (${gs.pendingFight.fromKey}) → (${gs.pendingFight.toKey}) with ${gs.pendingFight.amount} troops.`;
+      addBtn(buttons, 'Roll Dice!', 'bg-orange-700 hover:bg-orange-600', () => doAction({ type: 'ROLL_DICE' }));
+    } else {
+      body.textContent = 'No pending battle. Skip or go to final move.';
+    }
+    addBtn(buttons, 'Skip Fight', 'bg-zinc-700 hover:bg-zinc-600', () => doAction({ type: 'SKIP_FIGHT' }));
+    return;
+  }
+
+  if (phase === 'final_move') {
+    title.textContent = 'Final Move';
+    body.textContent = selectedCell
+      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell to move.`
+      : '1 final move. Select a cell or end turn.';
+    if (selectedCell) {
+      addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell = null; renderGrid(); renderActionPanel(); });
+    }
+    addBtn(buttons, 'End Turn', 'bg-violet-700 hover:bg-violet-600', () => doAction({ type: 'END_FINAL_MOVE' }));
+    return;
+  }
+}
+
+function addBtn(container, label, cls, onClick) {
+  const btn = document.createElement('button');
+  btn.textContent = label;
+  btn.className = `text-sm font-semibold py-1.5 px-3 rounded text-white transition-colors ${cls}`;
+  btn.addEventListener('click', onClick);
+  container.appendChild(btn);
+}
+
+function renderLog() {
+  const log = document.getElementById('log-panel');
+  const entries = (gameState.log || []).slice(-30).reverse();
+  log.innerHTML = entries.map(e => `<div class="py-0.5 border-b border-zinc-800/50">${e}</div>`).join('');
+}
+
+function showWinner() {
+  document.getElementById('win-title').textContent = gameState.winner + ' Wins!';
+  document.getElementById('win-overlay').classList.remove('hidden');
+}
+
+// Troop slider sync
+document.getElementById('troop-slider').addEventListener('input', function() {
+  document.getElementById('troop-val').textContent = this.value;
+});
+
+// Load recent games on init
+loadRecentGames();
+</script>
 </body>
 </html>

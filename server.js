@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -20,9 +21,106 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+// ─── Profile API ─────────────────────────────────────────────────────────────
+
+app.get('/api/me', (req, res) => {
+  if (req.user && req.user.username) {
+    res.json({ username: req.user.username });
+  } else {
+    res.json({ username: null });
+  }
+});
+
+// ─── Lobby API ───────────────────────────────────────────────────────────────
+
+// Create a lobby
+app.post('/api/lobbies', async (req, res) => {
+  try {
+    const { name, playerName } = req.body;
+    if (!name || !playerName) return res.status(400).json({ error: 'Need name and playerName' });
+    const token = crypto.randomBytes(32).toString('hex');
+    const { rows } = await pool.query(
+      `INSERT INTO lobbies (name, player0_name, player0_token) VALUES ($1, $2, $3) RETURNING id`,
+      [name.slice(0, 100), playerName.slice(0, 50), token]
+    );
+    res.json({ lobbyId: rows[0].id, token, playerIndex: 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List open lobbies
+app.get('/api/lobbies', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, player0_name, created_at FROM lobbies WHERE status = 'waiting' ORDER BY created_at DESC LIMIT 30`
+    );
+    res.json({ lobbies: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get lobby status (pass ?token=... to get your playerIndex)
+app.get('/api/lobbies/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM lobbies WHERE id = $1`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Lobby not found' });
+    const lobby = rows[0];
+    const { token } = req.query;
+    let playerIndex = null;
+    if (token && token === lobby.player0_token) playerIndex = 0;
+    else if (token && token === lobby.player1_token) playerIndex = 1;
+    res.json({
+      id: lobby.id,
+      name: lobby.name,
+      status: lobby.status,
+      gameId: lobby.game_id,
+      playerIndex,
+      player0Name: lobby.player0_name,
+      player1Name: lobby.player1_name,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Join a lobby (starts the game)
+app.post('/api/lobbies/:id/join', async (req, res) => {
+  const { playerName } = req.body;
+  if (!playerName) return res.status(400).json({ error: 'Need playerName' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(`SELECT * FROM lobbies WHERE id = $1 FOR UPDATE`, [req.params.id]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Lobby not found' }); }
+    const lobby = rows[0];
+    if (lobby.status !== 'waiting') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Lobby is no longer open' }); }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const state = createInitialState(lobby.player0_name, playerName.slice(0, 50));
+    const gameResult = await client.query(
+      `INSERT INTO games (state, created_at, updated_at) VALUES ($1, NOW(), NOW()) RETURNING id`,
+      [JSON.stringify(state)]
+    );
+    const gameId = gameResult.rows[0].id;
+    await client.query(
+      `UPDATE lobbies SET player1_name = $1, player1_token = $2, game_id = $3, status = 'playing' WHERE id = $4`,
+      [playerName.slice(0, 50), token, gameId, req.params.id]
+    );
+    await client.query('COMMIT');
+    res.json({ lobbyId: parseInt(req.params.id), token, playerIndex: 1, gameId });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── Game API ────────────────────────────────────────────────────────────────
 
-// Create a new game
+// Create a new local game (2-player same screen)
 app.post('/api/game/new', async (req, res) => {
   try {
     const { player1, player2 } = req.body;
@@ -50,16 +148,29 @@ app.get('/api/game/:id', async (req, res) => {
   }
 });
 
-// Game action
+// Game action — token optional, required for lobby games
 app.post('/api/game/:id/action', async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM games WHERE id = $1`, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Game not found' });
 
     const state = rows[0].state;
-    const { action } = req.body;
-    const result = applyAction(state, action);
+    const { action, token } = req.body;
 
+    // If a token is provided, validate it against the lobby
+    if (token) {
+      const { rows: lobbyRows } = await pool.query(
+        `SELECT * FROM lobbies WHERE game_id = $1`, [req.params.id]
+      );
+      if (lobbyRows.length) {
+        const lobby = lobbyRows[0];
+        const playerIndex = token === lobby.player0_token ? 0 : token === lobby.player1_token ? 1 : null;
+        if (playerIndex === null) return res.status(403).json({ error: 'Invalid player token' });
+        if (playerIndex !== state.currentPlayer) return res.status(403).json({ error: 'Not your turn' });
+      }
+    }
+
+    const result = applyAction(state, action);
     if (result.error) return res.status(400).json({ error: result.error });
 
     await pool.query(
@@ -91,9 +202,8 @@ app.get('/api/games', async (_req, res) => {
 const COLS = 20;
 const ROWS = 10;
 const INITIAL_TROOPS = 20;
-const SUPPLY_DECAY = 0.20; // 20% loss when supply line cut
+const SUPPLY_DECAY = 0.20;
 
-// Home squares: P0 = (0,4), P1 = (19,4) (roughly center vertically on each side)
 const HOME = [
   { col: 0, row: 4 },
   { col: 19, row: 4 },
@@ -103,13 +213,10 @@ function cellKey(col, row) { return `${col},${row}`; }
 
 function createInitialState(player1, player2) {
   const grid = {};
-
-  // Place home squares with initial garrison
   for (let p = 0; p < 2; p++) {
     const { col, row } = HOME[p];
     grid[cellKey(col, row)] = { owner: p, troops: INITIAL_TROOPS, home: true };
   }
-
   return {
     grid,
     players: [
@@ -117,10 +224,10 @@ function createInitialState(player1, player2) {
       { name: player2, reinforcements: INITIAL_TROOPS },
     ],
     currentPlayer: 0,
-    phase: 'place',       // place → move → fight → final_move → (next turn place)
+    phase: 'place',
     turnNumber: 1,
-    pendingFight: null,   // { fromKey, toKey } when awaiting dice roll confirmation
-    movesLeft: 1,         // moves available in move phase
+    pendingFight: null,
+    movesLeft: 1,
     winner: null,
     log: [`Game started. ${player1} vs ${player2}. Turn 1 — Place troops.`],
   };
@@ -133,15 +240,12 @@ function getNeighbors(col, row) {
     .filter(([c, r]) => c >= 0 && c < COLS && r >= 0 && r < ROWS);
 }
 
-// BFS: does player `p` have an unbroken supply line from `key` to their home?
 function hasSupplyLine(grid, key, playerIdx) {
   const homeKey = cellKey(HOME[playerIdx].col, HOME[playerIdx].row);
   if (key === homeKey) return true;
-
   const visited = new Set();
   const queue = [key];
   visited.add(key);
-
   while (queue.length) {
     const cur = queue.shift();
     if (cur === homeKey) return true;
@@ -157,11 +261,9 @@ function hasSupplyLine(grid, key, playerIdx) {
   return false;
 }
 
-// Apply 20% supply decay to cells not connected to home
 function applySupplyDecay(state) {
   const events = [];
   const grid = state.grid;
-
   for (const [key, cell] of Object.entries(grid)) {
     if (!hasSupplyLine(grid, key, cell.owner)) {
       const loss = Math.ceil(cell.troops * SUPPLY_DECAY);
@@ -176,31 +278,24 @@ function applySupplyDecay(state) {
   return events;
 }
 
-// Risk-style dice combat
-// attacker rolls min(troops-1, 3) dice, defender rolls min(troops, 2)
 function rollCombat(attackTroops, defendTroops) {
   const aDice = Math.min(attackTroops - 1, 3);
   const dDice = Math.min(defendTroops, 2);
-
   if (aDice < 1) return { error: 'Need at least 2 troops to attack' };
-
   const aRolls = Array.from({ length: aDice }, () => Math.ceil(Math.random() * 6)).sort((a, b) => b - a);
   const dRolls = Array.from({ length: dDice }, () => Math.ceil(Math.random() * 6)).sort((a, b) => b - a);
-
   let aLoss = 0, dLoss = 0;
   const pairs = Math.min(aDice, dDice);
   for (let i = 0; i < pairs; i++) {
     if (aRolls[i] > dRolls[i]) dLoss++;
     else aLoss++;
   }
-
   return { aRolls, dRolls, aLoss, dLoss };
 }
 
 function applyAction(state, action) {
   if (state.winner) return { error: 'Game is over' };
-
-  const s = JSON.parse(JSON.stringify(state)); // deep clone
+  const s = JSON.parse(JSON.stringify(state));
   const events = [];
   const cp = s.currentPlayer;
 
@@ -211,19 +306,13 @@ function applyAction(state, action) {
       const { col, row, amount } = action;
       if (typeof col !== 'number' || typeof row !== 'number') return { error: 'Invalid cell' };
       if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return { error: 'Out of bounds' };
-
       const key = cellKey(col, row);
       const cell = s.grid[key];
-
-      // Can only place on own cells
       if (!cell || cell.owner !== cp) return { error: 'Can only place troops on your own cells' };
-
       const amt = Math.max(1, Math.min(amount || 1, s.players[cp].reinforcements));
       s.players[cp].reinforcements -= amt;
       cell.troops += amt;
       events.push(`${s.players[cp].name} places ${amt} troops at (${key})`);
-
-      // If no reinforcements left, auto-advance
       if (s.players[cp].reinforcements <= 0) {
         s.phase = 'move';
         s.movesLeft = 3;
@@ -246,27 +335,21 @@ function applyAction(state, action) {
       const fromKey = cellKey(fromCol, fromRow);
       const toKey = cellKey(toCol, toRow);
       const fromCell = s.grid[fromKey];
-
       if (!fromCell || fromCell.owner !== cp) return { error: 'Not your cell' };
       if (fromCell.troops <= 1) return { error: 'Must keep at least 1 troop' };
-
-      // Must be adjacent
       const [dc, dr] = [toCol - fromCol, toRow - fromRow];
       if (Math.abs(dc) + Math.abs(dr) !== 1) return { error: 'Can only move to adjacent cell' };
       if (toCol < 0 || toCol >= COLS || toRow < 0 || toRow >= ROWS) return { error: 'Out of bounds' };
-
       const toCell = s.grid[toKey];
       const amt = Math.max(1, Math.min(amount || fromCell.troops - 1, fromCell.troops - 1));
 
       if (!toCell || toCell.owner === cp) {
-        // Friendly move
         fromCell.troops -= amt;
         if (!toCell) s.grid[toKey] = { owner: cp, troops: amt };
         else toCell.troops += amt;
         if (fromCell.troops === 0) delete s.grid[fromKey];
         events.push(`${s.players[cp].name} moves ${amt} troops from (${fromKey}) to (${toKey})`);
       } else {
-        // Attack — queue the fight
         s.pendingFight = { fromKey, toKey, amount: amt };
         s.phase = 'fight';
         events.push(`${s.players[cp].name} attacks (${toKey}) from (${fromKey}) with ${amt} troops`);
@@ -280,7 +363,6 @@ function applyAction(state, action) {
           events.push(`${s.players[cp].name} exhausted moves, entering fight phase`);
         }
       } else {
-        // final_move — one move then end turn
         advanceTurn(s, events);
       }
       break;
@@ -298,48 +380,33 @@ function applyAction(state, action) {
       const { fromKey, toKey, amount } = s.pendingFight;
       const fromCell = s.grid[fromKey];
       const toCell = s.grid[toKey];
-
       if (!fromCell || !toCell) return { error: 'Invalid fight state' };
-
       const result = rollCombat(amount, toCell.troops);
       if (result.error) return { error: result.error };
-
       const { aRolls, dRolls, aLoss, dLoss } = result;
       events.push(`Dice! Attacker [${aRolls}] vs Defender [${dRolls}] → attacker -${aLoss}, defender -${dLoss}`);
-
       fromCell.troops -= aLoss;
       toCell.troops -= dLoss;
-
-      // Attacker committed `amount` troops, but they physically stayed in fromKey until now
-      // If attacker won (defender at 0), move surviving attack troops in
       if (toCell.troops <= 0) {
         const surviving = amount - aLoss;
         events.push(`${s.players[cp].name} captures (${toKey})! ${surviving} troops move in`);
         delete s.grid[toKey];
-        if (surviving > 0) {
-          s.grid[toKey] = { owner: cp, troops: surviving };
-        }
-        fromCell.troops -= (amount - aLoss); // remove the troops that moved
+        if (surviving > 0) s.grid[toKey] = { owner: cp, troops: surviving };
+        fromCell.troops -= (amount - aLoss);
         if (fromCell.troops <= 0) delete s.grid[fromKey];
-
-        // Check win: did we capture enemy home?
         const enemyHomeKey = cellKey(HOME[1 - cp].col, HOME[1 - cp].row);
         if (toKey === enemyHomeKey) {
           s.winner = s.players[cp].name;
-          events.push(`🏆 ${s.players[cp].name} WINS by capturing the enemy home base!`);
+          events.push(`${s.players[cp].name} WINS by capturing the enemy home base!`);
           s.phase = 'gameover';
           s.pendingFight = null;
           return { state: s, events };
         }
       } else {
-        // Attacker lost/repelled — move attack troops back (already counted above)
         fromCell.troops -= (amount - aLoss);
         if (fromCell.troops <= 0) delete s.grid[fromKey];
       }
-
       s.pendingFight = null;
-
-      // After fight, go to final_move
       s.phase = 'final_move';
       s.movesLeft = 1;
       events.push(`${s.players[cp].name} gets 1 final move`);
@@ -369,28 +436,22 @@ function applyAction(state, action) {
 }
 
 function advanceTurn(s, events) {
-  // Apply supply decay before handing off
   const decayEvents = applySupplyDecay(s);
   events.push(...decayEvents);
-
-  // Check if anyone lost their home
   for (let p = 0; p < 2; p++) {
     const hk = cellKey(HOME[p].col, HOME[p].row);
     if (!s.grid[hk] || s.grid[hk].owner !== p) {
       const enemy = 1 - p;
       if (!s.winner) {
         s.winner = s.players[enemy].name;
-        events.push(`🏆 ${s.players[enemy].name} WINS — enemy home base lost!`);
+        events.push(`${s.players[enemy].name} WINS — enemy home base lost!`);
         s.phase = 'gameover';
         return;
       }
     }
   }
-
-  // Switch player
   s.currentPlayer = 1 - s.currentPlayer;
   s.turnNumber++;
-  // Earn reinforcements: 1 per 3 cells owned, minimum 1
   const cellsOwned = Object.values(s.grid).filter(c => c.owner === s.currentPlayer).length;
   const reinforcements = Math.max(1, Math.floor(cellsOwned / 3));
   s.players[s.currentPlayer].reinforcements += reinforcements;
@@ -418,6 +479,19 @@ async function start() {
       state JSONB NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS lobbies (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      player0_name VARCHAR(50) NOT NULL,
+      player0_token VARCHAR(64) NOT NULL,
+      player1_name VARCHAR(50),
+      player1_token VARCHAR(64),
+      game_id INTEGER REFERENCES games(id),
+      status VARCHAR(20) DEFAULT 'waiting',
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   app.listen(port, () => console.log(`Listening on :${port}`));

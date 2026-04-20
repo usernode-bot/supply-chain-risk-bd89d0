@@ -8,19 +8,11 @@
   <script>tailwind.config = { darkMode: 'class' }</script>
   <style>
     .cell {
-      width: 44px;
-      height: 44px;
+      width: 44px; height: 44px;
       border: 1px solid #3f3f46;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 600;
-      transition: all 0.15s;
-      position: relative;
-      user-select: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 11px; font-weight: 600;
+      transition: all 0.15s; position: relative; user-select: none;
     }
     .cell:hover { filter: brightness(1.3); }
     .cell.empty { background: #18181b; }
@@ -35,64 +27,155 @@
     .cell .home-icon { font-size: 9px; opacity: 0.7; }
     .cell.no-supply { opacity: 0.6; }
     .cell.no-supply::after {
-      content: '⚡';
-      position: absolute;
-      top: 1px;
-      right: 2px;
-      font-size: 9px;
+      content: '⚡'; position: absolute; top: 1px; right: 2px; font-size: 9px;
     }
-    #log-panel {
-      max-height: 160px;
-      overflow-y: auto;
-    }
+    #log-panel { max-height: 160px; overflow-y: auto; }
     .dice-roll {
-      display: inline-block;
-      width: 28px;
-      height: 28px;
-      background: #374151;
-      border-radius: 4px;
-      text-align: center;
-      line-height: 28px;
-      font-size: 16px;
-      margin: 2px;
+      display: inline-block; width: 28px; height: 28px;
+      background: #374151; border-radius: 4px;
+      text-align: center; line-height: 28px; font-size: 16px; margin: 2px;
     }
     .dice-a { background: #1e40af; }
     .dice-d { background: #7f1d1d; }
     .phase-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     }
+    .screen { display: none; }
+    .screen.active { display: flex; }
   </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen p-3 flex flex-col gap-3">
 
-  <!-- Setup Screen -->
-  <div id="setup-screen" class="flex flex-col items-center justify-center min-h-screen gap-6">
+  <!-- ═══════════════════════════════════════════════════════════ MAIN MENU -->
+  <div id="menu-screen" class="screen active flex-col items-center justify-center min-h-screen gap-6">
     <h1 class="text-3xl font-bold text-zinc-100">Supply Chain Risk</h1>
-    <p class="text-zinc-400 text-sm max-w-xs text-center">20×10 hex-grid war game. Capture the enemy's home base to win. Supply lines matter — cut off troops decay at 20% per turn.</p>
-    <div class="flex flex-col gap-3 w-64">
-      <div>
-        <label class="text-xs text-zinc-400 mb-1 block">Player 1 (Blue)</label>
-        <input id="p1-name" type="text" value="Player 1" class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-      </div>
-      <div>
-        <label class="text-xs text-zinc-400 mb-1 block">Player 2 (Red)</label>
-        <input id="p2-name" type="text" value="Player 2" class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-500">
-      </div>
-      <button id="start-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded transition-colors">
-        Start Game
+    <p class="text-zinc-400 text-sm max-w-xs text-center">20×10 war game. Capture the enemy home base to win. Supply lines matter.</p>
+    <div class="flex flex-col gap-3 w-72">
+      <button id="online-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-3 rounded transition-colors text-base">
+        Play Online (Lobby)
       </button>
-      <div id="recent-games" class="mt-2"></div>
+      <button id="local-btn" class="bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-3 rounded transition-colors text-base">
+        Local 2-Player (Screenshare)
+      </button>
+      <div id="menu-recent" class="mt-2"></div>
     </div>
   </div>
 
-  <!-- Game Screen -->
-  <div id="game-screen" class="hidden flex flex-col gap-3">
+  <!-- ═══════════════════════════════════════════════════════════ LOBBY SCREEN -->
+  <div id="lobby-screen" class="screen hidden flex-col items-center justify-center min-h-screen gap-5">
+    <div class="w-full max-w-lg">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-2xl font-bold">Game Lobby</h2>
+        <button id="lobby-back-btn" class="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-3 py-1.5">Back</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-zinc-700 mb-4">
+        <button id="tab-create" class="px-4 py-2 text-sm font-semibold border-b-2 border-violet-500 text-violet-400 -mb-px">Create Game</button>
+        <button id="tab-join" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 -mb-px">Join Game</button>
+      </div>
+
+      <!-- Create Game Panel -->
+      <div id="panel-create" class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-zinc-400 mb-1 block">Your Name</label>
+          <input id="create-player-name" type="text" placeholder="e.g. Commander Rex" maxlength="50"
+            class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
+        </div>
+        <div>
+          <label class="text-xs text-zinc-400 mb-1 block">Game Name</label>
+          <input id="create-game-name" type="text" placeholder="e.g. Battle for the Rhine" maxlength="100"
+            class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
+        </div>
+        <button id="create-lobby-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded transition-colors">
+          Create Game
+        </button>
+        <div id="create-error" class="text-red-400 text-xs hidden"></div>
+      </div>
+
+      <!-- Join Game Panel -->
+      <div id="panel-join" class="hidden flex-col gap-3">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-zinc-500">Open games</span>
+          <button id="refresh-btn" class="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-2 py-1">Refresh</button>
+        </div>
+        <div id="lobbies-list" class="flex flex-col gap-2 min-h-16">
+          <div class="text-zinc-600 text-sm text-center py-4">Loading...</div>
+        </div>
+
+        <div class="border-t border-zinc-800 pt-3">
+          <div class="text-xs text-zinc-500 mb-2">Or join by ID</div>
+          <div class="flex gap-2">
+            <input id="join-by-id" type="number" placeholder="Lobby ID" min="1"
+              class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
+            <button id="join-by-id-btn" class="bg-zinc-700 hover:bg-zinc-600 text-white font-semibold px-3 py-2 rounded text-sm">Go</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ JOIN MODAL -->
+  <div id="join-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-80 flex flex-col gap-4">
+      <h3 class="font-bold text-lg">Join Game</h3>
+      <div id="join-modal-game-name" class="text-zinc-400 text-sm"></div>
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Your Name</label>
+        <input id="join-player-name" type="text" placeholder="e.g. General Vance" maxlength="50"
+          class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
+      </div>
+      <div id="join-error" class="text-red-400 text-xs hidden"></div>
+      <div class="flex gap-2">
+        <button id="confirm-join-btn" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded transition-colors">Join</button>
+        <button id="cancel-join-btn" class="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-2 rounded transition-colors">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ WAITING ROOM -->
+  <div id="waiting-screen" class="screen hidden flex-col items-center justify-center min-h-screen gap-5">
+    <div class="text-center w-full max-w-sm">
+      <div class="text-4xl mb-4 animate-pulse">⏳</div>
+      <h2 class="text-xl font-bold mb-1">Waiting for Opponent</h2>
+      <p id="waiting-game-name" class="text-zinc-400 text-sm mb-4"></p>
+      <div class="bg-zinc-900 border border-zinc-700 rounded-lg p-4 mb-4">
+        <div class="text-xs text-zinc-500 mb-1">Share this Lobby ID with your opponent</div>
+        <div id="waiting-lobby-id" class="text-2xl font-mono font-bold text-violet-400"></div>
+      </div>
+      <p class="text-zinc-500 text-xs mb-6">Checking for opponent every 3 seconds...</p>
+      <button id="cancel-lobby-btn" class="bg-zinc-700 hover:bg-zinc-600 text-white font-semibold px-5 py-2 rounded transition-colors text-sm">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ LOCAL SETUP -->
+  <div id="local-screen" class="screen hidden flex-col items-center justify-center min-h-screen gap-6">
+    <h2 class="text-2xl font-bold">Local 2-Player</h2>
+    <p class="text-zinc-400 text-sm text-center max-w-xs">Both players share the same screen. Pass the device or use screenshare.</p>
+    <div class="flex flex-col gap-3 w-64">
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Player 1 (Blue)</label>
+        <input id="p1-name" type="text" value="Player 1"
+          class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+      </div>
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Player 2 (Red)</label>
+        <input id="p2-name" type="text" value="Player 2"
+          class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-red-500">
+      </div>
+      <button id="start-local-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 rounded transition-colors">
+        Start Game
+      </button>
+      <button id="local-back-btn" class="bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2 rounded transition-colors text-sm">Back</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ GAME SCREEN -->
+  <div id="game-screen" class="screen hidden flex-col gap-3">
+
+    <!-- Multiplayer banner -->
+    <div id="mp-banner" class="hidden rounded-lg px-4 py-2 text-sm font-semibold text-center"></div>
 
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-2">
@@ -126,36 +209,23 @@
 
     <!-- Grid + controls -->
     <div class="flex gap-3 flex-wrap">
-      <!-- Grid -->
       <div class="overflow-auto">
         <div id="grid" style="display:grid; grid-template-columns: repeat(20, 44px); gap: 1px; background: #27272a; border: 1px solid #27272a; border-radius: 4px; overflow: hidden;"></div>
       </div>
-
-      <!-- Side panel -->
       <div class="flex flex-col gap-2 min-w-48 max-w-64 flex-1">
-
-        <!-- Action panel -->
         <div id="action-panel" class="bg-zinc-900 border border-zinc-800 rounded p-3 text-sm flex flex-col gap-2">
           <div id="action-title" class="font-semibold text-zinc-300 text-xs uppercase tracking-wide">Actions</div>
           <div id="action-body" class="text-zinc-400 text-xs leading-relaxed"></div>
-
-          <!-- Troop amount slider -->
           <div id="troop-picker" class="hidden flex flex-col gap-1">
             <label class="text-xs text-zinc-500">Troops: <span id="troop-val">1</span></label>
-            <input id="troop-slider" type="range" min="1" max="20" value="1"
-              class="w-full accent-violet-500">
+            <input id="troop-slider" type="range" min="1" max="20" value="1" class="w-full accent-violet-500">
           </div>
-
           <div id="action-buttons" class="flex flex-col gap-1.5"></div>
         </div>
-
-        <!-- Dice result -->
         <div id="dice-panel" class="hidden bg-zinc-900 border border-zinc-800 rounded p-3 text-sm">
           <div class="text-xs font-semibold text-zinc-400 mb-2">Battle Result</div>
           <div id="dice-display" class="flex flex-col gap-1"></div>
         </div>
-
-        <!-- Log -->
         <div class="bg-zinc-900 border border-zinc-800 rounded p-3">
           <div class="text-xs font-semibold text-zinc-500 mb-1">Battle Log</div>
           <div id="log-panel" class="text-xs text-zinc-400 space-y-0.5"></div>
@@ -169,7 +239,7 @@
         <div class="text-5xl mb-4">🏆</div>
         <h2 id="win-title" class="text-2xl font-bold mb-2"></h2>
         <p class="text-zinc-400 text-sm mb-6">The enemy home base has been captured!</p>
-        <button id="play-again-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 px-6 rounded transition-colors">Play Again</button>
+        <button id="play-again-btn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 px-6 rounded transition-colors">Main Menu</button>
       </div>
     </div>
   </div>
@@ -178,90 +248,354 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let gameId = null;
 let gameState = null;
-let selectedCell = null;  // { col, row }
-let pendingPlaceCell = null; // { col, row } for troop placement
+let selectedCell = null;
+let pendingPlaceCell = null;
+
+// Multiplayer state
+let myPlayerIndex = null;   // null = local, 0 or 1 = multiplayer
+let myToken = null;
+let myLobbyId = null;
+let pollTimer = null;
 
 const COLS = 20, ROWS = 10;
 const HOME = [{ col: 0, row: 4 }, { col: 19, row: 4 }];
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-document.getElementById('start-btn').addEventListener('click', startGame);
-document.getElementById('back-btn').addEventListener('click', () => {
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('setup-screen').classList.remove('hidden');
-  loadRecentGames();
-});
-document.getElementById('play-again-btn').addEventListener('click', () => {
-  document.getElementById('win-overlay').classList.add('hidden');
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('setup-screen').classList.remove('hidden');
-  loadRecentGames();
-});
-
-async function startGame() {
-  const p1 = document.getElementById('p1-name').value.trim() || 'Player 1';
-  const p2 = document.getElementById('p2-name').value.trim() || 'Player 2';
-  const res = await fetch('/api/game/new', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player1: p1, player2: p2 })
+// ─── Screen management ────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  el.classList.add('active');
+  el.style.display = 'flex';
+  document.querySelectorAll('.screen').forEach(s => {
+    if (!s.classList.contains('active')) s.style.display = 'none';
   });
-  const data = await res.json();
-  gameId = data.id;
-  gameState = data.state;
-  document.getElementById('setup-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.remove('hidden');
-  selectedCell = null;
-  renderAll();
 }
 
-async function loadRecentGames() {
+// ─── Session persistence ──────────────────────────────────────────────────────
+function saveSession(data) {
+  try { localStorage.setItem('scr_session', JSON.stringify(data)); } catch {}
+}
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem('scr_session') || 'null'); } catch { return null; }
+}
+function clearSession() {
+  try { localStorage.removeItem('scr_session'); } catch {}
+}
+
+// ─── Main Menu ────────────────────────────────────────────────────────────────
+document.getElementById('online-btn').addEventListener('click', () => {
+  showScreen('lobby-screen');
+  loadLobbies();
+});
+document.getElementById('local-btn').addEventListener('click', () => {
+  showScreen('local-screen');
+});
+
+async function loadMenuRecentGames() {
   const res = await fetch('/api/games');
   const data = await res.json();
-  const el = document.getElementById('recent-games');
+  const el = document.getElementById('menu-recent');
   if (!data.games || !data.games.length) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="text-xs text-zinc-500 mb-1">Recent games:</div>' +
     data.games.slice(0, 5).map(g =>
       `<div class="flex justify-between text-xs text-zinc-400 py-0.5 cursor-pointer hover:text-zinc-200"
-        onclick="loadGame(${g.id})">
+        onclick="resumeGame(${g.id})">
         <span>${g.p1} vs ${g.p2}</span>
         <span class="${g.winner ? 'text-green-500' : 'text-yellow-500'}">${g.winner ? g.winner + ' won' : g.phase}</span>
       </div>`
     ).join('');
 }
 
-async function loadGame(id) {
+async function resumeGame(id) {
   const res = await fetch(`/api/game/${id}`);
   const data = await res.json();
-  gameId = data.id;
-  gameState = data.state;
-  document.getElementById('setup-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.remove('hidden');
-  selectedCell = null;
-  renderAll();
+  myPlayerIndex = null; myToken = null; myLobbyId = null;
+  enterGame(data.id, data.state);
 }
+
+// ─── Local Setup ──────────────────────────────────────────────────────────────
+document.getElementById('local-back-btn').addEventListener('click', () => showScreen('menu-screen'));
+document.getElementById('start-local-btn').addEventListener('click', async () => {
+  const p1 = document.getElementById('p1-name').value.trim() || 'Player 1';
+  const p2 = document.getElementById('p2-name').value.trim() || 'Player 2';
+  const res = await fetch('/api/game/new', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ player1: p1, player2: p2 })
+  });
+  const data = await res.json();
+  myPlayerIndex = null; myToken = null; myLobbyId = null;
+  enterGame(data.id, data.state);
+});
+
+// ─── Lobby Screen ─────────────────────────────────────────────────────────────
+document.getElementById('lobby-back-btn').addEventListener('click', () => showScreen('menu-screen'));
+
+// Tabs
+document.getElementById('tab-create').addEventListener('click', () => switchTab('create'));
+document.getElementById('tab-join').addEventListener('click', () => switchTab('join'));
+
+function switchTab(tab) {
+  const isCreate = tab === 'create';
+  document.getElementById('tab-create').className = isCreate
+    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-violet-500 text-violet-400 -mb-px'
+    : 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 -mb-px';
+  document.getElementById('tab-join').className = !isCreate
+    ? 'px-4 py-2 text-sm font-semibold border-b-2 border-violet-500 text-violet-400 -mb-px'
+    : 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 -mb-px';
+  document.getElementById('panel-create').classList.toggle('hidden', !isCreate);
+  document.getElementById('panel-join').classList.toggle('hidden', isCreate);
+  if (!isCreate) loadLobbies();
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadLobbies);
+
+async function loadLobbies() {
+  const list = document.getElementById('lobbies-list');
+  list.innerHTML = '<div class="text-zinc-600 text-sm text-center py-4">Loading...</div>';
+  try {
+    const res = await fetch('/api/lobbies');
+    const data = await res.json();
+    if (!data.lobbies || !data.lobbies.length) {
+      list.innerHTML = '<div class="text-zinc-600 text-sm text-center py-4">No open games. Create one!</div>';
+      return;
+    }
+    list.innerHTML = data.lobbies.map(l => `
+      <div class="flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 hover:border-zinc-500 cursor-pointer transition-colors"
+           onclick="openJoinModal(${l.id}, ${JSON.stringify(l.name)})">
+        <div>
+          <div class="font-semibold text-sm">${escHtml(l.name)}</div>
+          <div class="text-xs text-zinc-500">Host: ${escHtml(l.player0_name)} · ID: ${l.id}</div>
+        </div>
+        <span class="text-xs text-green-400 font-semibold bg-green-900/30 rounded px-2 py-0.5">Open</span>
+      </div>`).join('');
+  } catch {
+    list.innerHTML = '<div class="text-red-400 text-sm text-center py-4">Error loading lobbies.</div>';
+  }
+}
+
+// Create game
+document.getElementById('create-lobby-btn').addEventListener('click', async () => {
+  const playerName = document.getElementById('create-player-name').value.trim();
+  const gameName = document.getElementById('create-game-name').value.trim();
+  const errEl = document.getElementById('create-error');
+  if (!playerName || !gameName) {
+    errEl.textContent = 'Please fill in both fields.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch('/api/lobbies', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: gameName, playerName })
+    });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+    myToken = data.token;
+    myPlayerIndex = 0;
+    myLobbyId = data.lobbyId;
+    saveSession({ token: myToken, playerIndex: myPlayerIndex, lobbyId: myLobbyId });
+    enterWaitingRoom(data.lobbyId, gameName);
+  } catch (err) {
+    errEl.textContent = 'Failed to create game.';
+    errEl.classList.remove('hidden');
+  }
+});
+
+// ─── Join Modal ───────────────────────────────────────────────────────────────
+let _joinLobbyId = null;
+
+function openJoinModal(lobbyId, lobbyName) {
+  _joinLobbyId = lobbyId;
+  document.getElementById('join-modal-game-name').textContent = `"${lobbyName}"`;
+  document.getElementById('join-player-name').value = '';
+  document.getElementById('join-error').classList.add('hidden');
+  document.getElementById('join-modal').classList.remove('hidden');
+}
+
+document.getElementById('cancel-join-btn').addEventListener('click', () => {
+  document.getElementById('join-modal').classList.add('hidden');
+  _joinLobbyId = null;
+});
+
+document.getElementById('confirm-join-btn').addEventListener('click', async () => {
+  const playerName = document.getElementById('join-player-name').value.trim();
+  const errEl = document.getElementById('join-error');
+  if (!playerName) { errEl.textContent = 'Please enter your name.'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+  await joinLobby(_joinLobbyId, playerName);
+});
+
+document.getElementById('join-by-id-btn').addEventListener('click', async () => {
+  const id = parseInt(document.getElementById('join-by-id').value);
+  if (!id) return;
+  // Fetch lobby info first to show name in modal
+  try {
+    const res = await fetch(`/api/lobbies/${id}`);
+    const data = await res.json();
+    if (data.error || data.status !== 'waiting') {
+      alert(data.error || 'This lobby is no longer open.');
+      return;
+    }
+    openJoinModal(id, data.name);
+  } catch { alert('Lobby not found.'); }
+});
+
+async function joinLobby(lobbyId, playerName) {
+  const errEl = document.getElementById('join-error');
+  try {
+    const res = await fetch(`/api/lobbies/${lobbyId}/join`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerName })
+    });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+    document.getElementById('join-modal').classList.add('hidden');
+    myToken = data.token;
+    myPlayerIndex = 1;
+    myLobbyId = data.lobbyId;
+    saveSession({ token: myToken, playerIndex: myPlayerIndex, lobbyId: myLobbyId, gameId: data.gameId });
+    // Load game state and enter game
+    const gRes = await fetch(`/api/game/${data.gameId}`);
+    const gData = await gRes.json();
+    enterGame(data.gameId, gData.state);
+  } catch {
+    errEl.textContent = 'Failed to join game.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// ─── Waiting Room ─────────────────────────────────────────────────────────────
+function enterWaitingRoom(lobbyId, gameName) {
+  document.getElementById('waiting-lobby-id').textContent = lobbyId;
+  document.getElementById('waiting-game-name').textContent = gameName;
+  showScreen('waiting-screen');
+  startWaitingPoll(lobbyId);
+}
+
+function startWaitingPoll(lobbyId) {
+  stopPoll();
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/lobbies/${lobbyId}?token=${myToken}`);
+      const data = await res.json();
+      if (data.status === 'playing' && data.gameId) {
+        stopPoll();
+        saveSession({ token: myToken, playerIndex: myPlayerIndex, lobbyId: myLobbyId, gameId: data.gameId });
+        const gRes = await fetch(`/api/game/${data.gameId}`);
+        const gData = await gRes.json();
+        enterGame(data.gameId, gData.state);
+      }
+    } catch {}
+  }, 3000);
+}
+
+document.getElementById('cancel-lobby-btn').addEventListener('click', () => {
+  stopPoll();
+  clearSession();
+  myToken = null; myPlayerIndex = null; myLobbyId = null;
+  showScreen('lobby-screen');
+});
+
+// ─── Game Entry ───────────────────────────────────────────────────────────────
+function enterGame(id, state) {
+  gameId = id;
+  gameState = state;
+  selectedCell = null;
+  pendingPlaceCell = null;
+  showScreen('game-screen');
+  document.getElementById('win-overlay').classList.add('hidden');
+  renderAll();
+  updateMpBanner();
+  startGamePoll();
+}
+
+function updateMpBanner() {
+  const banner = document.getElementById('mp-banner');
+  if (myPlayerIndex === null) { banner.classList.add('hidden'); return; }
+  banner.classList.remove('hidden');
+  if (gameState.winner) {
+    banner.className = 'rounded-lg px-4 py-2 text-sm font-semibold text-center bg-zinc-800 text-zinc-300';
+    banner.textContent = 'Game over';
+  } else if (gameState.currentPlayer === myPlayerIndex) {
+    banner.className = 'rounded-lg px-4 py-2 text-sm font-semibold text-center bg-green-900/60 text-green-300 border border-green-800';
+    banner.textContent = 'Your turn';
+  } else {
+    banner.className = 'rounded-lg px-4 py-2 text-sm font-semibold text-center bg-zinc-800/60 text-zinc-400 border border-zinc-700';
+    banner.textContent = `Waiting for ${gameState.players[gameState.currentPlayer].name}...`;
+  }
+}
+
+function isMyTurn() {
+  return myPlayerIndex === null || gameState.currentPlayer === myPlayerIndex;
+}
+
+function startGamePoll() {
+  stopPoll();
+  if (myPlayerIndex === null) return; // local game — no polling needed
+  if (gameState.winner) return;
+  if (isMyTurn()) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/game/${gameId}`);
+      const data = await res.json();
+      const prevPlayer = gameState.currentPlayer;
+      gameState = data.state;
+      updateMpBanner();
+      renderAll();
+      if (gameState.currentPlayer === myPlayerIndex || gameState.winner) {
+        stopPoll();
+      }
+    } catch {}
+  }, 2500);
+}
+
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// ─── Back / Play again ────────────────────────────────────────────────────────
+document.getElementById('back-btn').addEventListener('click', () => {
+  stopPoll(); clearSession();
+  myToken = null; myPlayerIndex = null; myLobbyId = null;
+  showScreen('menu-screen');
+  loadMenuRecentGames();
+});
+document.getElementById('play-again-btn').addEventListener('click', () => {
+  stopPoll(); clearSession();
+  myToken = null; myPlayerIndex = null; myLobbyId = null;
+  document.getElementById('win-overlay').classList.add('hidden');
+  showScreen('menu-screen');
+  loadMenuRecentGames();
+});
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 async function doAction(action) {
+  if (!isMyTurn()) return;
+  const body = { action };
+  if (myToken) body.token = myToken;
   const res = await fetch(`/api/game/${gameId}/action`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action })
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   if (data.error) { showActionError(data.error); return; }
   gameState = data.state;
   selectedCell = null;
   pendingPlaceCell = null;
-
   if (data.events) showDiceEvents(data.events);
   renderAll();
+  updateMpBanner();
+  // After acting, check if it's now opponent's turn → start polling
+  if (myPlayerIndex !== null && !isMyTurn() && !gameState.winner) {
+    startGamePoll();
+  }
 }
 
 function showActionError(msg) {
   const body = document.getElementById('action-body');
   const prev = body.innerHTML;
-  body.innerHTML = `<span class="text-red-400">${msg}</span>`;
+  body.innerHTML = `<span class="text-red-400">${escHtml(msg)}</span>`;
   setTimeout(() => { body.innerHTML = prev; }, 2000);
 }
 
@@ -275,22 +609,20 @@ function showDiceEvents(events) {
       const aMatch = e.match(/Attacker \[([^\]]+)\]/);
       const dMatch = e.match(/Defender \[([^\]]+)\]/);
       const lossMatch = e.match(/attacker -(\d+), defender -(\d+)/);
-      let html = `<div class="text-xs text-zinc-400 mb-1">${e}</div>`;
       if (aMatch && dMatch) {
         const aDice = aMatch[1].split(',').map(Number);
         const dDice = dMatch[1].split(',').map(Number);
-        html = `<div class="flex items-center gap-1 flex-wrap">
+        let html = `<div class="flex items-center gap-1 flex-wrap">
           <span class="text-xs text-blue-400 mr-1">Atk:</span>
           ${aDice.map(d => `<span class="dice-roll dice-a">${d}</span>`).join('')}
           <span class="text-xs text-zinc-500 mx-1">vs</span>
           <span class="text-xs text-red-400 mr-1">Def:</span>
           ${dDice.map(d => `<span class="dice-roll dice-d">${d}</span>`).join('')}
         </div>`;
-        if (lossMatch) {
-          html += `<div class="text-xs mt-1 text-zinc-400">Attacker -${lossMatch[1]} / Defender -${lossMatch[2]}</div>`;
-        }
+        if (lossMatch) html += `<div class="text-xs mt-1 text-zinc-400">Attacker -${lossMatch[1]} / Defender -${lossMatch[2]}</div>`;
+        return html;
       }
-      return html;
+      return `<div class="text-xs text-zinc-400 mb-1">${escHtml(e)}</div>`;
     }).join('');
   } else {
     panel.classList.add('hidden');
@@ -334,8 +666,7 @@ function hasSupplyLine(grid, key, playerIdx) {
 
 function getValidTargets(col, row) {
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
-  return dirs
-    .map(([dc,dr]) => [col+dc, row+dr])
+  return dirs.map(([dc,dr]) => [col+dc, row+dr])
     .filter(([c,r]) => c >= 0 && c < COLS && r >= 0 && r < ROWS);
 }
 
@@ -345,10 +676,9 @@ function renderGrid() {
   const cp = gs.currentPlayer;
   const phase = gs.phase;
   const selKey = selectedCell ? cellKey(selectedCell.col, selectedCell.row) : null;
+  const canAct = isMyTurn() && !gs.winner;
 
-  // Figure out valid targets if something is selected
-  let validMoves = new Set();
-  let attackTargets = new Set();
+  let validMoves = new Set(), attackTargets = new Set();
   if (selectedCell && (phase === 'move' || phase === 'final_move')) {
     const fromCell = gs.grid[selKey];
     if (fromCell && fromCell.owner === cp && fromCell.troops > 1) {
@@ -358,16 +688,7 @@ function renderGrid() {
         if (!nCell || nCell.owner === cp) validMoves.add(nk);
         else attackTargets.add(nk);
       }
-      // Can also expand to empty
-      for (const [nc, nr] of getValidTargets(selectedCell.col, selectedCell.row)) {
-        const nk = cellKey(nc, nr);
-        if (!gs.grid[nk]) validMoves.add(nk);
-      }
     }
-  }
-  if (selectedCell && phase === 'place') {
-    const fromCell = gs.grid[selKey];
-    // In place phase, selection just shows placement target
   }
 
   let cells = '';
@@ -378,8 +699,6 @@ function renderGrid() {
       const isHome0 = HOME[0].col === c && HOME[0].row === r;
       const isHome1 = HOME[1].col === c && HOME[1].row === r;
       const isSelected = key === selKey;
-      const isValidMove = validMoves.has(key);
-      const isAttackTarget = attackTargets.has(key);
       const noSupply = cell && !hasSupplyLine(gs.grid, key, cell.owner);
 
       let cls = 'cell';
@@ -389,26 +708,28 @@ function renderGrid() {
       if (isHome0) cls += ' home-0';
       if (isHome1) cls += ' home-1';
       if (isSelected) cls += ' selected';
-      if (isValidMove && !isSelected) cls += ' valid-target';
-      if (isAttackTarget) cls += ' attack-target';
+      if (validMoves.has(key) && !isSelected) cls += ' valid-target';
+      if (attackTargets.has(key)) cls += ' attack-target';
       if (noSupply) cls += ' no-supply';
+      if (!canAct) cls += ' cursor-default';
 
       const inner = cell
-        ? `<span class="troops">${cell.troops}</span>${(isHome0 || isHome1) ? '<span class="home-icon">HOME</span>' : ''}`
-        : (isHome0 || isHome1 ? '<span class="home-icon text-zinc-600">HOME</span>' : '');
+        ? `<span class="troops">${cell.troops}</span>${(isHome0||isHome1)?'<span class="home-icon">HOME</span>':''}`
+        : (isHome0||isHome1 ? '<span class="home-icon text-zinc-600">HOME</span>' : '');
 
-      cells += `<div class="${cls}" data-col="${c}" data-row="${r}" title="${key}${cell ? ' ('+['Blue','Red'][cell.owner]+' '+cell.troops+')' : ''}">${inner}</div>`;
+      cells += `<div class="${cls}" data-col="${c}" data-row="${r}">${inner}</div>`;
     }
   }
   grid.innerHTML = cells;
-
-  // Add click handlers
-  grid.querySelectorAll('.cell').forEach(el => {
-    el.addEventListener('click', () => onCellClick(parseInt(el.dataset.col), parseInt(el.dataset.row)));
-  });
+  if (canAct) {
+    grid.querySelectorAll('.cell').forEach(el => {
+      el.addEventListener('click', () => onCellClick(parseInt(el.dataset.col), parseInt(el.dataset.row)));
+    });
+  }
 }
 
 function onCellClick(col, row) {
+  if (!isMyTurn()) return;
   const gs = gameState;
   const cp = gs.currentPlayer;
   const phase = gs.phase;
@@ -427,67 +748,39 @@ function onCellClick(col, row) {
 
   if (phase === 'move' || phase === 'final_move') {
     if (!selectedCell) {
-      // Select own cell
       if (cell && cell.owner === cp && cell.troops > 1) {
         selectedCell = { col, row };
-        renderGrid();
-        renderActionPanel();
+        renderGrid(); renderActionPanel();
       }
       return;
     }
-
     const selKey = cellKey(selectedCell.col, selectedCell.row);
-
-    // Click same cell = deselect
     if (key === selKey) {
-      selectedCell = null;
-      renderGrid();
-      renderActionPanel();
-      return;
+      selectedCell = null; renderGrid(); renderActionPanel(); return;
     }
-
-    // Check adjacency
     const dc = Math.abs(col - selectedCell.col);
     const dr = Math.abs(row - selectedCell.row);
     if (dc + dr !== 1) {
-      // Re-select if own cell
-      if (cell && cell.owner === cp && cell.troops > 1) {
-        selectedCell = { col, row };
-        renderGrid();
-        renderActionPanel();
-      } else {
-        selectedCell = null;
-        renderGrid();
-        renderActionPanel();
-      }
+      if (cell && cell.owner === cp && cell.troops > 1) { selectedCell = { col, row }; renderGrid(); renderActionPanel(); }
+      else { selectedCell = null; renderGrid(); renderActionPanel(); }
       return;
     }
-
     const fromCell = gs.grid[selKey];
     if (!fromCell || fromCell.owner !== cp) { selectedCell = null; renderGrid(); return; }
-
     const maxTroops = fromCell.troops - 1;
     if (maxTroops < 1) { selectedCell = null; renderGrid(); return; }
 
-    // Show troop picker before confirming move
     const isAttack = cell && cell.owner !== cp;
     const troopSlider = document.getElementById('troop-slider');
     const troopVal = document.getElementById('troop-val');
     troopSlider.max = maxTroops;
     troopSlider.value = Math.min(parseInt(troopSlider.value) || maxTroops, maxTroops);
     troopVal.textContent = troopSlider.value;
-
     document.getElementById('troop-picker').classList.remove('hidden');
-
-    // Store pending move
     window._pendingMove = { fromCol: selectedCell.col, fromRow: selectedCell.row, toCol: col, toRow: row };
     renderActionPanel(isAttack ? 'confirm-attack' : 'confirm-move');
     renderGrid();
     return;
-  }
-
-  if (phase === 'fight') {
-    // clicking does nothing special in fight phase
   }
 }
 
@@ -495,22 +788,12 @@ function renderHUD() {
   const gs = gameState;
   document.getElementById('turn-info').textContent = `Turn ${gs.turnNumber} — ${gs.players[gs.currentPlayer].name}'s turn`;
 
-  const phaseLabels = {
-    place: 'Place Troops', move: 'Move', fight: 'Fight',
-    final_move: 'Final Move', gameover: 'Game Over'
-  };
-  const phaseColors = {
-    place: 'bg-green-900 text-green-300',
-    move: 'bg-blue-900 text-blue-300',
-    fight: 'bg-orange-900 text-orange-300',
-    final_move: 'bg-purple-900 text-purple-300',
-    gameover: 'bg-zinc-700 text-zinc-300',
-  };
+  const phaseLabels = { place:'Place Troops', move:'Move', fight:'Fight', final_move:'Final Move', gameover:'Game Over' };
+  const phaseColors = { place:'bg-green-900 text-green-300', move:'bg-blue-900 text-blue-300', fight:'bg-orange-900 text-orange-300', final_move:'bg-purple-900 text-purple-300', gameover:'bg-zinc-700 text-zinc-300' };
   const badge = document.getElementById('phase-badge');
   badge.textContent = phaseLabels[gs.phase] || gs.phase;
   badge.className = 'phase-badge ' + (phaseColors[gs.phase] || 'bg-zinc-700 text-zinc-300');
 
-  // Active player highlight
   document.getElementById('p0-bar').classList.toggle('ring-2', gs.currentPlayer === 0);
   document.getElementById('p0-bar').classList.toggle('ring-blue-500', gs.currentPlayer === 0);
   document.getElementById('p1-bar').classList.toggle('ring-2', gs.currentPlayer === 1);
@@ -533,8 +816,15 @@ function renderActionPanel(override) {
   const body = document.getElementById('action-body');
   const buttons = document.getElementById('action-buttons');
   const picker = document.getElementById('troop-picker');
-
   buttons.innerHTML = '';
+
+  // If it's not your turn in multiplayer, show waiting message
+  if (myPlayerIndex !== null && !isMyTurn() && !gs.winner) {
+    title.textContent = 'Waiting';
+    body.textContent = `Waiting for ${gs.players[gs.currentPlayer].name} to move...`;
+    picker.classList.add('hidden');
+    return;
+  }
 
   if (gs.winner) {
     title.textContent = 'Game Over';
@@ -551,14 +841,11 @@ function renderActionPanel(override) {
       if (pendingPlaceCell) {
         const key = cellKey(pendingPlaceCell.col, pendingPlaceCell.row);
         body.textContent = `Placing on (${key}). You have ${reinf} reinforcements.`;
-
         const slider = document.getElementById('troop-slider');
         const valEl = document.getElementById('troop-val');
-        slider.max = reinf;
-        slider.value = Math.min(parseInt(slider.value) || 1, reinf);
+        slider.max = reinf; slider.value = Math.min(parseInt(slider.value)||1, reinf);
         valEl.textContent = slider.value;
         picker.classList.remove('hidden');
-
         addBtn(buttons, 'Place Troops', 'bg-green-700 hover:bg-green-600', () => {
           const amt = parseInt(document.getElementById('troop-slider').value);
           doAction({ type: 'PLACE_TROOPS', col: pendingPlaceCell.col, row: pendingPlaceCell.row, amount: amt });
@@ -577,11 +864,9 @@ function renderActionPanel(override) {
   if (phase === 'move') {
     title.textContent = 'Move Troops';
     body.textContent = selectedCell
-      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell to move or attack.`
+      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell.`
       : `${gs.movesLeft} move(s) left. Select a cell with >1 troop.`;
-    if (selectedCell) {
-      addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell = null; renderGrid(); renderActionPanel(); });
-    }
+    if (selectedCell) addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell=null; renderGrid(); renderActionPanel(); });
     addBtn(buttons, 'Skip Moves', 'bg-zinc-700 hover:bg-zinc-600', () => doAction({ type: 'END_MOVE' }));
     return;
   }
@@ -593,7 +878,6 @@ function renderActionPanel(override) {
     body.textContent = isAtk
       ? `Attack (${cellKey(pm.toCol, pm.toRow)}) from (${cellKey(pm.fromCol, pm.fromRow)})`
       : `Move from (${cellKey(pm.fromCol, pm.fromRow)}) to (${cellKey(pm.toCol, pm.toRow)})`;
-
     addBtn(buttons, isAtk ? 'Attack!' : 'Move', isAtk ? 'bg-orange-700 hover:bg-orange-600' : 'bg-blue-700 hover:bg-blue-600', () => {
       const amt = parseInt(document.getElementById('troop-slider').value);
       doAction({ type: 'MOVE_TROOPS', fromCol: pm.fromCol, fromRow: pm.fromRow, toCol: pm.toCol, toRow: pm.toRow, amount: amt });
@@ -601,7 +885,7 @@ function renderActionPanel(override) {
       document.getElementById('troop-picker').classList.add('hidden');
     });
     addBtn(buttons, 'Cancel', 'bg-zinc-700 hover:bg-zinc-600', () => {
-      selectedCell = null; window._pendingMove = null;
+      selectedCell=null; window._pendingMove=null;
       document.getElementById('troop-picker').classList.add('hidden');
       renderGrid(); renderActionPanel();
     });
@@ -624,11 +908,9 @@ function renderActionPanel(override) {
   if (phase === 'final_move') {
     title.textContent = 'Final Move';
     body.textContent = selectedCell
-      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell to move.`
+      ? `Selected (${cellKey(selectedCell.col, selectedCell.row)}). Click adjacent cell.`
       : '1 final move. Select a cell or end turn.';
-    if (selectedCell) {
-      addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell = null; renderGrid(); renderActionPanel(); });
-    }
+    if (selectedCell) addBtn(buttons, 'Deselect', 'bg-zinc-700 hover:bg-zinc-600', () => { selectedCell=null; renderGrid(); renderActionPanel(); });
     addBtn(buttons, 'End Turn', 'bg-violet-700 hover:bg-violet-600', () => doAction({ type: 'END_FINAL_MOVE' }));
     return;
   }
@@ -645,7 +927,7 @@ function addBtn(container, label, cls, onClick) {
 function renderLog() {
   const log = document.getElementById('log-panel');
   const entries = (gameState.log || []).slice(-30).reverse();
-  log.innerHTML = entries.map(e => `<div class="py-0.5 border-b border-zinc-800/50">${e}</div>`).join('');
+  log.innerHTML = entries.map(e => `<div class="py-0.5 border-b border-zinc-800/50">${escHtml(e)}</div>`).join('');
 }
 
 function showWinner() {
@@ -653,13 +935,47 @@ function showWinner() {
   document.getElementById('win-overlay').classList.remove('hidden');
 }
 
-// Troop slider sync
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 document.getElementById('troop-slider').addEventListener('input', function() {
   document.getElementById('troop-val').textContent = this.value;
 });
 
-// Load recent games on init
-loadRecentGames();
+// ─── Resume session on load ───────────────────────────────────────────────────
+async function tryResumeSession() {
+  const session = loadSession();
+  if (!session) return false;
+  try {
+    const res = await fetch(`/api/lobbies/${session.lobbyId}?token=${session.token}`);
+    const lobby = await res.json();
+    if (lobby.error) { clearSession(); return false; }
+    myToken = session.token;
+    myPlayerIndex = session.playerIndex;
+    myLobbyId = session.lobbyId;
+    if (lobby.status === 'playing' && lobby.gameId) {
+      const gRes = await fetch(`/api/game/${lobby.gameId}`);
+      const gData = await gRes.json();
+      enterGame(lobby.gameId, gData.state);
+      return true;
+    } else if (lobby.status === 'waiting' && session.playerIndex === 0) {
+      enterWaitingRoom(session.lobbyId, lobby.name);
+      return true;
+    }
+  } catch {}
+  clearSession();
+  return false;
+}
+
+// Init
+(async () => {
+  const resumed = await tryResumeSession();
+  if (!resumed) {
+    showScreen('menu-screen');
+    loadMenuRecentGames();
+  }
+})();
 </script>
 </body>
 </html>

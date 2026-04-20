@@ -21,6 +21,16 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+// ─── Profile API ─────────────────────────────────────────────────────────────
+
+app.get('/api/me', (req, res) => {
+  if (req.user && req.user.username) {
+    res.json({ username: req.user.username });
+  } else {
+    res.json({ username: null });
+  }
+});
+
 // ─── Lobby API ───────────────────────────────────────────────────────────────
 
 // Create a lobby

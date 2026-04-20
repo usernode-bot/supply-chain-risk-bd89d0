@@ -257,6 +257,29 @@ let myToken = null;
 let myLobbyId = null;
 let pollTimer = null;
 
+// Usernode profile
+let myUsername = null;
+
+async function fetchUsername() {
+  try {
+    const res = await fetch('/api/me');
+    const data = await res.json();
+    if (data.username) {
+      myUsername = data.username;
+      // Pre-fill and lock name fields
+      const createField = document.getElementById('create-player-name');
+      createField.value = myUsername;
+      createField.readOnly = true;
+      createField.classList.add('opacity-60', 'cursor-not-allowed');
+      document.querySelector('label[for="create-player-name-label"]')?.remove();
+      const joinField = document.getElementById('join-player-name');
+      joinField.value = myUsername;
+      joinField.readOnly = true;
+      joinField.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+  } catch {}
+}
+
 const COLS = 20, ROWS = 10;
 const HOME = [{ col: 0, row: 4 }, { col: 19, row: 4 }];
 
@@ -408,7 +431,8 @@ let _joinLobbyId = null;
 function openJoinModal(lobbyId, lobbyName) {
   _joinLobbyId = lobbyId;
   document.getElementById('join-modal-game-name').textContent = `"${lobbyName}"`;
-  document.getElementById('join-player-name').value = '';
+  const joinField = document.getElementById('join-player-name');
+  joinField.value = myUsername || '';
   document.getElementById('join-error').classList.add('hidden');
   document.getElementById('join-modal').classList.remove('hidden');
 }
@@ -970,6 +994,7 @@ async function tryResumeSession() {
 
 // Init
 (async () => {
+  await fetchUsername();
   const resumed = await tryResumeSession();
   if (!resumed) {
     showScreen('menu-screen');

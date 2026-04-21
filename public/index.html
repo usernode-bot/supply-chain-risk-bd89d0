@@ -262,7 +262,9 @@ let myUsername = null;
 
 async function fetchUsername() {
   try {
-    const res = await fetch('/api/me');
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    const url = urlToken ? `/api/me?token=${encodeURIComponent(urlToken)}` : '/api/me';
+    const res = await fetch(url);
     const data = await res.json();
     if (data.username) {
       myUsername = data.username;

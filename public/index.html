@@ -95,7 +95,7 @@
       </div>
 
       <!-- Join Game Panel -->
-      <div id="panel-join" class="hidden flex-col gap-3">
+      <div id="panel-join" class="hidden flex flex-col gap-3">
         <div class="flex items-center justify-between mb-1">
           <span class="text-xs text-zinc-500">Open games</span>
           <button id="refresh-btn" class="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-2 py-1">Refresh</button>
@@ -369,6 +369,11 @@ function switchTab(tab) {
 
 document.getElementById('refresh-btn').addEventListener('click', loadLobbies);
 
+document.getElementById('lobbies-list').addEventListener('click', e => {
+  const card = e.target.closest('[data-lobby-id]');
+  if (card) openJoinModal(parseInt(card.dataset.lobbyId), card.dataset.lobbyName);
+});
+
 async function loadLobbies() {
   const list = document.getElementById('lobbies-list');
   list.innerHTML = '<div class="text-zinc-600 text-sm text-center py-4">Loading...</div>';
@@ -380,8 +385,8 @@ async function loadLobbies() {
       return;
     }
     list.innerHTML = data.lobbies.map(l => `
-      <div class="flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 hover:border-zinc-500 cursor-pointer transition-colors"
-           onclick="openJoinModal(${l.id}, ${JSON.stringify(l.name)})">
+      <div class="flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-3 hover:border-zinc-500 cursor-pointer transition-colors"
+           data-lobby-id="${l.id}" data-lobby-name="${escHtml(l.name)}">
         <div>
           <div class="font-semibold text-sm">${escHtml(l.name)}</div>
           <div class="text-xs text-zinc-500">Host: ${escHtml(l.player0_name)} · ID: ${l.id}</div>

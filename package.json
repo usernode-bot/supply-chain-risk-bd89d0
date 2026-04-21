@@ -2,7 +2,7 @@
   "name": "supply-chain-risk-bd89d0",
   "version": "1.0.0",
   "private": true,
-  "description": "Supply-chain-risk",
+  "description": "Risk Game: Supply Chain Version",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

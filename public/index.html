@@ -259,19 +259,19 @@ let pollTimer = null;
 
 // Usernode profile
 let myUsername = null;
+const userToken = new URLSearchParams(window.location.search).get('token');
 
 async function fetchUsername() {
   try {
-    const res = await fetch('/api/me');
+    const url = userToken ? `/api/me?token=${encodeURIComponent(userToken)}` : '/api/me';
+    const res = await fetch(url);
     const data = await res.json();
     if (data.username) {
       myUsername = data.username;
-      // Pre-fill and lock name fields
       const createField = document.getElementById('create-player-name');
       createField.value = myUsername;
       createField.readOnly = true;
       createField.classList.add('opacity-60', 'cursor-not-allowed');
-      document.querySelector('label[for="create-player-name-label"]')?.remove();
       const joinField = document.getElementById('join-player-name');
       joinField.value = myUsername;
       joinField.readOnly = true;

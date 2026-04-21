@@ -78,7 +78,7 @@
 
       <!-- Create Game Panel -->
       <div id="panel-create" class="flex flex-col gap-3">
-        <div>
+        <div id="create-name-row">
           <label class="text-xs text-zinc-400 mb-1 block">Your Name</label>
           <input id="create-player-name" type="text" placeholder="e.g. Commander Rex" maxlength="50"
             class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
@@ -121,7 +121,7 @@
     <div class="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-80 flex flex-col gap-4">
       <h3 class="font-bold text-lg">Join Game</h3>
       <div id="join-modal-game-name" class="text-zinc-400 text-sm"></div>
-      <div>
+      <div id="join-name-row">
         <label class="text-xs text-zinc-400 mb-1 block">Your Name</label>
         <input id="join-player-name" type="text" placeholder="e.g. General Vance" maxlength="50"
           class="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-violet-500">
@@ -266,16 +266,11 @@ async function fetchUsername() {
     const data = await res.json();
     if (data.username) {
       myUsername = data.username;
-      // Pre-fill and lock name fields
-      const createField = document.getElementById('create-player-name');
-      createField.value = myUsername;
-      createField.readOnly = true;
-      createField.classList.add('opacity-60', 'cursor-not-allowed');
-      document.querySelector('label[for="create-player-name-label"]')?.remove();
-      const joinField = document.getElementById('join-player-name');
-      joinField.value = myUsername;
-      joinField.readOnly = true;
-      joinField.classList.add('opacity-60', 'cursor-not-allowed');
+      // Replace create-game name input with a "Playing as" badge
+      document.getElementById('create-name-row').innerHTML =
+        `<div class="text-xs text-zinc-500">Playing as <span class="font-semibold text-violet-300">${escHtml(myUsername)}</span></div>`;
+      // Pre-fill local 2-player Player 1 name
+      document.getElementById('p1-name').value = myUsername;
     }
   } catch {}
 }
@@ -398,11 +393,11 @@ async function loadLobbies() {
 
 // Create game
 document.getElementById('create-lobby-btn').addEventListener('click', async () => {
-  const playerName = document.getElementById('create-player-name').value.trim();
+  const playerName = myUsername || document.getElementById('create-player-name')?.value.trim();
   const gameName = document.getElementById('create-game-name').value.trim();
   const errEl = document.getElementById('create-error');
   if (!playerName || !gameName) {
-    errEl.textContent = 'Please fill in both fields.';
+    errEl.textContent = playerName ? 'Please enter a game name.' : 'Please fill in both fields.';
     errEl.classList.remove('hidden');
     return;
   }
@@ -431,8 +426,12 @@ let _joinLobbyId = null;
 function openJoinModal(lobbyId, lobbyName) {
   _joinLobbyId = lobbyId;
   document.getElementById('join-modal-game-name').textContent = `"${lobbyName}"`;
-  const joinField = document.getElementById('join-player-name');
-  joinField.value = myUsername || '';
+  if (myUsername) {
+    document.getElementById('join-name-row').innerHTML =
+      `<div class="text-xs text-zinc-500">Playing as <span class="font-semibold text-violet-300">${escHtml(myUsername)}</span></div>`;
+  } else {
+    document.getElementById('join-player-name').value = '';
+  }
   document.getElementById('join-error').classList.add('hidden');
   document.getElementById('join-modal').classList.remove('hidden');
 }
@@ -443,7 +442,7 @@ document.getElementById('cancel-join-btn').addEventListener('click', () => {
 });
 
 document.getElementById('confirm-join-btn').addEventListener('click', async () => {
-  const playerName = document.getElementById('join-player-name').value.trim();
+  const playerName = myUsername || document.getElementById('join-player-name')?.value.trim();
   const errEl = document.getElementById('join-error');
   if (!playerName) { errEl.textContent = 'Please enter your name.'; errEl.classList.remove('hidden'); return; }
   errEl.classList.add('hidden');
